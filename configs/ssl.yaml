@@ -1,0 +1,8 @@
+# SimCLR self-supervised pretraining (Stage 1 of the method).
+epochs: 100
+lr: 1.0e-3
+batch_size: 256
+weight_decay: 1.0e-6
+temperature: 0.5         # NT-Xent temperature
+proj_dim: 128            # projection head output dim
+proj_hidden_dim: 2048    # projection head hidden dim

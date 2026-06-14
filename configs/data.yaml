@@ -1,0 +1,22 @@
+# Dataset location, classes and splitting policy.
+root: Dataset
+classes: [glioma, meningioma, notumor, pituitary]
+image_size: 224
+
+# Split strategy:
+#   phash  - leakage-free grouped split: perceptual-hash near-duplicates are
+#            forced onto the same side of train/val/test (approximate patient grouping).
+#   naive  - plain random split. Exists ONLY to measure leakage inflation vs phash.
+#   source - use the dataset's own Training/Testing partition (Tr-/Te- filename prefixes).
+split_strategy: phash
+
+# Perceptual-hash near-duplicate grouping (used by the phash split).
+phash_hash_size: 8       # imagehash phash size; produces hash_size^2 bits
+phash_distance: 5        # max Hamming distance to treat two slices as near-duplicates
+
+# Fractions for phash / naive splits (the source split ignores these).
+test_fraction: 0.2
+val_fraction: 0.1        # carved group-aware from the train side
+
+# Optional newline-delimited file of image paths to exclude from indexing.
+exclude_list: null

@@ -1,0 +1,4 @@
+# Backbone and classifier head.
+backbone: vit_base_patch16_224   # any timm ViT name
+pretrained: true                 # ImageNet init (set false for the "from scratch" baseline B2)
+num_classes: 4                   # must equal len(data.classes)

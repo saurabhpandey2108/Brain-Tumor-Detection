@@ -1,0 +1,39 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments
+.venv/
+
+# Data (large; not versioned)
+/Dataset/
+data/
+
+# Experiment outputs
+results/
+checkpoints/
+wandb/
+runs/
+outputs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

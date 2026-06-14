@@ -1,0 +1,14 @@
+# Fine-tuning (Stage 2 of the method).
+method: fixmatch         # "supervised" (labelled only) or "fixmatch" (semi-supervised)
+epochs: 50
+lr: 3.0e-4
+batch_size: 64           # labelled batch size
+weight_decay: 1.0e-4
+dropout: 0.0             # dropout before the linear classifier head
+early_stop_patience: 10  # stop after N epochs without val macro-F1 improvement
+
+# FixMatch-specific hyperparameters (ignored when method == "supervised").
+fixmatch:
+  mu: 7                   # unlabelled : labelled batch-size ratio
+  threshold: 0.95        # pseudo-label confidence threshold
+  lambda_u: 1.0          # weight on the unlabelled consistency loss

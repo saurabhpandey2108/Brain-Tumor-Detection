@@ -1,0 +1,9 @@
+# Base config. Composes the per-concern config files in this directory.
+# Each path under `includes` is resolved relative to this file's directory and
+# loaded into the matching section of the validated Config (see config.py).
+includes:
+  data: data.yaml
+  model: model.yaml
+  ssl: ssl.yaml
+  finetune: finetune.yaml
+  experiment: experiment.yaml

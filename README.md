@@ -31,7 +31,7 @@ The project is being built and verified in stages.
 | 3 | Data layer (indexing, splits, transforms, datasets, synthetic) | ✅ done |
 | 4 | Models layer (timm ViT backbone, heads, classifier) | ✅ done |
 | 5 | Training layer (NT-Xent, SimCLR, supervised + FixMatch, callbacks) | ✅ done |
-| 6 | Evaluation — metrics ✅ · attention-rollout explainability ⏳ | 🚧 partial |
+| 6 | Evaluation — metrics ✅ · attention-rollout explainability ✅ | ✅ done |
 | 7 | CLI (`pretrain / finetune / evaluate / run-grid / smoke`) | ⏳ pending |
 | 8 | Streamlit app | ⏳ pending |
 | 9 | README / SLURM template / EDA notebook | 🚧 in progress |
@@ -40,7 +40,7 @@ The project is being built and verified in stages.
 Current verification (everything that exists passes):
 
 ```bash
-uv run pytest        # 34 passed
+uv run pytest        # 39 passed
 uv run ruff check .  # All checks passed!
 ```
 
@@ -88,6 +88,56 @@ Results accumulate to `results/results.csv`, one row per
 Images are grayscale, replicated to 3 channels. **No colour jitter is ever used**
 — augmentation is geometry/intensity only (flip, affine, resized-crop, blur,
 erasing).
+
+---
+
+## Explainability (attention rollout)
+
+Every prediction can be explained with an **attention-rollout** heatmap
+(Abnar & Zuidema, 2020) that shows which image regions drove the ViT's decision.
+Lives in `brain_tumor_ssl.evaluation.explain`.
+
+**How it works**
+
+1. timm's fused attention does not expose the attention probabilities, so a
+   forward hook on each transformer block recomputes them from that block's own
+   `qkv` projection during a **single** forward pass (q/k-norm aware, so it works
+   across timm ViT variants).
+2. Per block the attention is reduced over heads (`mean` / `max` / `min`), a
+   residual **identity** term is added (tokens attend to themselves through the
+   skip connection), and rows are renormalised to sum to 1.
+3. These per-block matrices are **multiplied across all blocks**; the `[CLS]`
+   row of the product (offset by `num_prefix_tokens`) is the saliency of each
+   patch.
+4. That row is reshaped to the patch grid (`patch_embed.grid_size`), normalised
+   to `[0, 1]`, and upsampled over the image as a colour overlay.
+
+An optional `discard_ratio` zeroes the lowest-weight attention entries before
+rollout to suppress background noise.
+
+**API**
+
+```python
+import torch
+from brain_tumor_ssl.evaluation.explain import (
+    attention_rollout,   # saliency maps only
+    explain,             # predictions + saliency maps (one forward pass)
+    overlay_heatmap,     # blend a heatmap onto an image -> RGB uint8 array
+    save_explanation,    # render the overlay and write it to disk (PNG)
+)
+
+# images: (B, 3, H, W) tensor; clf: a trained Classifier with a ViT backbone
+preds, heatmaps = explain(clf, images)            # heatmaps: (B, grid_h, grid_w) in [0, 1]
+save_explanation(images[0], heatmaps[0], Path("out/overlay.png"))
+
+# lower-level: heatmaps for an arbitrary ViT backbone, with options
+maps = attention_rollout(clf.backbone, images, head_fusion="mean", discard_ratio=0.1)
+```
+
+`overlay_heatmap` accepts CHW / HWC / HW images (tensor or array, any scale),
+bilinearly upsamples the heatmap to the image resolution, and blends it with a
+matplotlib colormap (`alpha`, `colormap` configurable). A non-ViT backbone
+raises a clear `ValueError`.
 
 ---
 
@@ -154,10 +204,10 @@ src/brain_tumor_ssl/
 ├── data/                # indexing, splits, transforms, datasets, synthetic
 ├── models/              # backbone (timm ViT), heads, classifier + SSL transfer
 ├── training/            # losses (NT-Xent), ssl_simclr, finetune, callbacks
-├── evaluation/          # metrics  (+ explain — pending)
+├── evaluation/          # metrics + explain (ViT attention-rollout)
 ├── utils/               # seed, logging (loguru), device, io
 └── cli.py               # typer app (subcommands pending)
-tests/                   # config, splits, transforms, models, metrics
+tests/                   # config, splits, transforms, models, metrics, explain
 ```
 
 ---

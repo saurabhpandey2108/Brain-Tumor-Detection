@@ -97,6 +97,97 @@ erasing).
 
 ---
 
+## Architecture & workflow
+
+Two models are assembled on **one shared ViT backbone**. The backbone carries
+knowledge from ImageNet → (optionally) SimCLR → into the classifier; each stage
+reuses the same features for a different purpose.
+
+```
+                    Dataset/  (glioma · meningioma · notumor · pituitary)
+                         │
+        ┌────────────────▼─────────────────┐
+        │ DATA LAYER                        │   purpose: leakage-free, label-efficient prep
+        │  index → phash split → label sel. │
+        └───────┬───────────────────┬───────┘
+        unlabelled train        labelled subset (1/5/10/25/100 %)
+                │                       │
+   ┌────────────▼───────────┐          │
+   │ STAGE 1: SimCLR         │          │   model: SimCLRModel = ViT backbone + projection head
+   │ self-supervised         │          │   purpose: learn MRI features WITHOUT labels
+   │ (NT-Xent on 2 views)    │          │
+   └────────────┬───────────┘          │
+        SSL backbone weights            │
+        (projection head discarded)     │
+                │                       │
+                └───────────┬───────────┘
+                            ▼
+              ┌─────────────────────────────┐
+              │ STAGE 2: Fine-tuning         │   model: Classifier = ViT backbone + linear head
+              │  supervised  OR  FixMatch    │   purpose: learn the 4-class task from few labels
+              └──────────────┬──────────────┘
+                   trained Classifier checkpoint
+                            │
+            ┌───────────────┼────────────────┐
+            ▼                                 ▼
+   ┌─────────────────┐               ┌──────────────────┐
+   │ EVALUATION      │               │ APP / INFERENCE  │   model: same Classifier
+   │ metrics + CSV   │               │ predict + overlay│   purpose: use / demo the model
+   │ + attention map │               └──────────────────┘
+   └─────────────────┘
+```
+
+### What runs at each stage
+
+| Stage | Model | Input → Output | Purpose | Command |
+|-------|-------|----------------|---------|---------|
+| 0. Data | — | `Dataset/` → split + labelled subset | Group near-duplicate slices (phash) so none leak across splits; pick a class-balanced labelled fraction | (internal) |
+| 1. SimCLR pretrain | **`SimCLRModel`** (backbone + projection head) | unlabelled train, two augmented views → **SSL backbone weights** | Learn general MRI structure with **no labels** (NT-Xent contrastive loss) | `btssl pretrain` |
+| 2. Fine-tune | **`Classifier`** (backbone + linear head) | SSL/ImageNet backbone + labelled (+unlabelled) → **trained classifier** | Adapt to the 4-class task; FixMatch also exploits unlabelled data via pseudo-labels | `btssl finetune` |
+| 3. Evaluate | **`Classifier`** | checkpoint + test split → accuracy, macro-F1, confusion, `results.csv` | Measure on held-out data; attention rollout explains *why* | `btssl evaluate` |
+| 4. Grid | **`Classifier`** ×N | runs stage 2–3 over seeds × fractions | Produce the paper's label-efficiency / leakage tables | `btssl run-grid` |
+| 5. App / inference | **`Classifier`** | one MRI → class + probabilities + heatmap | Interactive decision-support demo | `streamlit run app/streamlit_app.py` |
+
+### The two models
+
+- **`SimCLRModel` = ViT backbone + ProjectionHead** (`Linear(768→2048)→BN→ReLU→Linear(2048→128)`).
+  Job: representation learning *without labels*. **Stage 1 only** — afterwards the
+  projection head is discarded and only the backbone weights transfer onward.
+- **`Classifier` = ViT backbone + ClassifierHead** (`Dropout→Linear(768→4)`).
+  Job: the actual task — map a 768-d feature vector to the 4 tumor classes. This is
+  what you fine-tune, evaluate, save, and serve in the app.
+
+The shared **`vit_base_patch16_224`** backbone (768-d features, ~86M params) takes
+grayscale MRI replicated to 3 channels and ImageNet-normalised.
+
+### "Pretrained" means two different things
+
+1. **ImageNet pretraining** — `model.pretrained: true`; weights downloaded by `timm`.
+2. **SimCLR pretraining** — Stage 1 on *your* unlabelled MRIs, producing an SSL
+   checkpoint you pass via `--ssl-checkpoint`.
+
+Training is always **fine-tuning a `Classifier`**; the experiment ID only changes how
+its backbone is *initialised* before that fine-tuning:
+
+| ID | Backbone init | Fine-tune | How |
+|----|---------------|-----------|-----|
+| B1 | ImageNet | supervised | `finetune --method supervised` (no `--ssl-checkpoint`) |
+| B2 | random (scratch) | supervised | set `model.pretrained: false`, supervised |
+| B3 | SimCLR | supervised | `pretrain` → `finetune --method supervised --ssl-checkpoint …` |
+| B4 (**proposed**) | SimCLR | FixMatch | `pretrain` → `finetune --method fixmatch --ssl-checkpoint …` |
+
+When `--ssl-checkpoint` is given the backbone is built with `pretrained=False` and then
+overwritten by the SSL weights (so SSL wins and the ImageNet download is skipped);
+without it, the backbone keeps its ImageNet init.
+
+### Augmentation differs per stage (same images, different views)
+
+- **Stage 1 (SimCLR):** `simclr` transform — aggressive crops + geometry/intensity for hard contrastive pairs.
+- **Stage 2 (FixMatch):** `weak` view (flip + small shift) makes the pseudo-label; the `strong` view must match it — that consistency is the semi-supervised signal.
+- **Stage 3/5 (eval & app):** `eval` transform — deterministic resize/crop/normalise, no randomness, so predictions are reproducible.
+
+---
+
 ## Explainability (attention rollout)
 
 Every prediction can be explained with an **attention-rollout** heatmap

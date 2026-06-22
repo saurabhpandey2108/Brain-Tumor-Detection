@@ -1,13 +1,26 @@
 # Fine-tuning (Stage 2 of the method).
-method: fixmatch         # "supervised" (labelled only) or "fixmatch" (semi-supervised)
-epochs: 50
+#
+# Tuned to train the FULL vit_base model well WITHOUT a GPU (device: auto in
+# experiment.yaml resolves to CPU when no CUDA is present):
+#   - batch_size 32 keeps vit_base@224 activations within CPU RAM. Batch size is a
+#     memory/throughput knob only; it does NOT reduce model capacity. Raise to 64+
+#     on a GPU.
+#   - high epoch cap (80) with early stopping on validation macro-F1, so the run
+#     trains to convergence and stops automatically once it plateaus (no wasted time).
+#   - light dropout (0.1) regularises the classifier head on this small (~1.2k image)
+#     dataset to improve generalisation.
+# Model, resolution and the leakage-free phash split stay full research quality.
+method: fixmatch         # at 100% labels this reduces to supervised (no unlabelled data)
+epochs: 80               # cap only; early stopping below ends training at convergence
 lr: 3.0e-4
-batch_size: 64           # labelled batch size
+batch_size: 32           # CPU-safe; increase on a GPU
 weight_decay: 1.0e-4
-dropout: 0.0             # dropout before the linear classifier head
-early_stop_patience: 10  # stop after N epochs without val macro-F1 improvement
+dropout: 0.1             # regularise the classifier head
+early_stop_patience: 15  # stop after 15 epochs without val macro-F1 improvement
+class_weighted: true     # weight labelled CE by inverse class frequency (handles imbalance)
 
-# FixMatch-specific hyperparameters (ignored when method == "supervised").
+# FixMatch-specific hyperparameters (used only when method == "fixmatch" AND there
+# is unlabelled data, i.e. label_fraction < 1.0).
 fixmatch:
   mu: 7                   # unlabelled : labelled batch-size ratio
   threshold: 0.95        # pseudo-label confidence threshold

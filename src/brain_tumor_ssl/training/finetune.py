@@ -18,6 +18,25 @@ from brain_tumor_ssl.utils.logging import get_logger
 logger = get_logger()
 
 
+def compute_class_weights(labels: list[int], num_classes: int) -> torch.Tensor:
+    """Inverse-frequency ("balanced") class weights for cross-entropy.
+
+    Rarer classes receive proportionally larger weights so an imbalanced training
+    set does not bias the classifier toward majority classes. Uses the sklearn
+    "balanced" formula ``n_samples / (n_classes * count[c])``; absent classes are
+    clamped to a count of 1 to avoid division by zero.
+
+    Args:
+        labels: Integer class labels of the labelled training samples.
+        num_classes: Total number of classes.
+
+    Returns:
+        A ``(num_classes,)`` float tensor of per-class weights.
+    """
+    counts = torch.bincount(torch.tensor(labels, dtype=torch.long), minlength=num_classes).float()
+    return counts.sum() / (num_classes * counts.clamp_min(1.0))
+
+
 def _amp_context(use_amp: bool) -> AbstractContextManager:
     """Return an autocast context on CUDA, else a no-op context."""
     return torch.autocast("cuda") if use_amp else nullcontext()
@@ -104,6 +123,7 @@ def finetune_supervised(
     cfg: FinetuneConfig,
     device: torch.device,
     class_names: list[str],
+    class_weights: torch.Tensor | None = None,
 ) -> EarlyStopper:
     """Supervised fine-tuning on the labelled subset (baseline).
 
@@ -114,11 +134,14 @@ def finetune_supervised(
         cfg: Fine-tuning hyperparameters.
         device: Device to train on.
         class_names: Class names for validation metrics.
+        class_weights: Optional per-class cross-entropy weights for imbalance
+            (see :func:`compute_class_weights`); ``None`` for unweighted CE.
 
     Returns:
         The :class:`EarlyStopper` holding the best weights/metric.
     """
     model.to(device)
+    weight = class_weights.to(device) if class_weights is not None else None
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler() if use_amp else None
@@ -131,7 +154,7 @@ def finetune_supervised(
             labels = labels.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             with _amp_context(use_amp):
-                loss = F.cross_entropy(model(images), labels)
+                loss = F.cross_entropy(model(images), labels, weight=weight)
             _backward(loss, optimizer, scaler)
 
         if _epoch_end(model, val_loader, device, class_names, epoch, stopper):
@@ -150,6 +173,7 @@ def finetune_fixmatch(
     cfg: FinetuneConfig,
     device: torch.device,
     class_names: list[str],
+    class_weights: torch.Tensor | None = None,
 ) -> EarlyStopper:
     """FixMatch semi-supervised fine-tuning.
 
@@ -167,12 +191,16 @@ def finetune_fixmatch(
         cfg: Fine-tuning hyperparameters (uses ``cfg.fixmatch``).
         device: Device to train on.
         class_names: Class names for validation metrics.
+        class_weights: Optional per-class weights for the labelled cross-entropy
+            term (the unlabelled consistency loss is left unweighted, as its targets
+            are model pseudo-labels); ``None`` for unweighted CE.
 
     Returns:
         The :class:`EarlyStopper` holding the best weights/metric.
     """
     fm = cfg.fixmatch
     model.to(device)
+    weight = class_weights.to(device) if class_weights is not None else None
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler() if use_amp else None
@@ -188,7 +216,7 @@ def finetune_fixmatch(
             optimizer.zero_grad(set_to_none=True)
 
             with _amp_context(use_amp):
-                loss_sup = F.cross_entropy(model(images_l), labels_l)
+                loss_sup = F.cross_entropy(model(images_l), labels_l, weight=weight)
                 loss_u = torch.zeros((), device=device)
 
                 if unl_iter is not None:

@@ -1,10 +1,11 @@
-"""Dataset splitting: leakage-free perceptual-hash grouped split, naive and source
-splits, plus class-balanced labelled/unlabelled subsetting.
+"""Dataset splitting strategies and class-balanced label subsetting.
 
-The phash strategy approximates patient-level grouping (the public dataset has no
-patient IDs): near-duplicate slices are clustered with union-find over perceptual
-hashes and whole clusters are kept on one side of every split, so no near-duplicate
-can leak across train/val/test.
+Provides the leakage-free perceptual-hash grouped split, the naive and source
+splits, plus class-balanced labelled/unlabelled subsetting. The phash strategy
+approximates patient-level grouping (the public dataset has no patient IDs):
+near-duplicate slices are clustered with union-find over perceptual hashes and
+whole clusters are kept on one side of every split, so no near-duplicate can leak
+across train/val/test.
 """
 
 from __future__ import annotations
@@ -219,7 +220,7 @@ def source_split(samples: list[Sample], val_fraction: float, seed: int) -> DataS
             len(test),
         )
 
-    if val_fraction > 0.0 and len(train_all) > len(set(s.label for s in train_all)):
+    if val_fraction > 0.0 and len(train_all) > len({s.label for s in train_all}):
         labels = [s.label for s in train_all]
         train, val = train_test_split(
             train_all, test_size=val_fraction, stratify=labels, random_state=seed

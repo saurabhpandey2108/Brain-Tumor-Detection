@@ -92,6 +92,7 @@ class FinetuneConfig(_Strict):
     weight_decay: float = Field(ge=0.0)
     dropout: float = Field(default=0.0, ge=0.0, lt=1.0)
     early_stop_patience: int = Field(default=10, gt=0)
+    class_weighted: bool = Field(default=True)
     fixmatch: FixMatchConfig
 
 

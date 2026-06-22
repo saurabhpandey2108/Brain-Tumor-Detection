@@ -31,7 +31,11 @@ from brain_tumor_ssl.models.classifier import (
     build_simclr_model,
     load_ssl_into_classifier,
 )
-from brain_tumor_ssl.training.finetune import finetune_fixmatch, finetune_supervised
+from brain_tumor_ssl.training.finetune import (
+    compute_class_weights,
+    finetune_fixmatch,
+    finetune_supervised,
+)
 from brain_tumor_ssl.training.ssl_simclr import pretrain_simclr
 from brain_tumor_ssl.utils.device import resolve_device
 from brain_tumor_ssl.utils.io import append_results_row, load_checkpoint, save_checkpoint
@@ -219,6 +223,14 @@ def run_finetune(
 
     clf = _build_finetune_classifier(cfg, ssl_checkpoint, device)
 
+    class_weights = (
+        compute_class_weights([s.label for s in labeled], len(cfg.data.classes))
+        if cfg.finetune.class_weighted
+        else None
+    )
+    if class_weights is not None:
+        logger.info("class-weighted CE: {}", [round(w, 3) for w in class_weights.tolist()])
+
     if cfg.finetune.method == "fixmatch":
         unlabeled_loader = (
             _loader(
@@ -239,10 +251,17 @@ def run_finetune(
             cfg.finetune,
             device,
             cfg.data.classes,
+            class_weights=class_weights,
         )
     else:
         finetune_supervised(
-            clf, labeled_loader, val_loader, cfg.finetune, device, cfg.data.classes
+            clf,
+            labeled_loader,
+            val_loader,
+            cfg.finetune,
+            device,
+            cfg.data.classes,
+            class_weights=class_weights,
         )
 
     metrics = evaluate(clf, test_loader, device, cfg.data.classes)

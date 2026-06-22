@@ -79,7 +79,7 @@ def generate_synthetic_dataset(
         class_dir = root / class_name / class_name
         class_dir.mkdir(parents=True, exist_ok=True)
         abbr = class_name[:2]
-        n_train = int(round(train_ratio * per_class))
+        n_train = round(train_ratio * per_class)
 
         base_seeds: list[np.ndarray] = []
         base_paths: list[Path] = []

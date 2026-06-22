@@ -1,4 +1,0 @@
-# Backbone for CPU proof runs: a tiny ViT (~5.7M params) instead of vit_base.
-backbone: vit_tiny_patch16_224   # any timm ViT name
-pretrained: true                 # ImageNet init (much better than scratch for few epochs)
-num_classes: 4                   # must equal len(data.classes)

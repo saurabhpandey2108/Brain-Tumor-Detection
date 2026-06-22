@@ -14,6 +14,7 @@ import pytest
 from brain_tumor_ssl.config import load_config
 from brain_tumor_ssl.data.synthetic import generate_synthetic_dataset
 from brain_tumor_ssl.runner import run_evaluate, run_finetune, run_pretrain
+from brain_tumor_ssl.training.finetune import compute_class_weights
 
 CLASSES = ["glioma", "meningioma", "notumor", "pituitary"]
 
@@ -36,6 +37,22 @@ def cfg(tmp_path: Path):
         },
     }
     return load_config("configs/config.yaml", overrides=overrides)
+
+
+def test_class_weights_balance_minority_classes() -> None:
+    # Balanced counts -> all weights equal to 1.0.
+    balanced = compute_class_weights([0, 0, 1, 1, 2, 2, 3, 3], num_classes=4)
+    assert balanced.tolist() == pytest.approx([1.0, 1.0, 1.0, 1.0])
+
+    # Imbalanced: the rare class (1) must get a larger weight than the common one (0).
+    weights = compute_class_weights([0, 0, 0, 0, 1], num_classes=2)
+    assert weights[1] > weights[0]
+    # sklearn "balanced" formula: n_samples / (n_classes * count).
+    assert weights.tolist() == pytest.approx([5 / (2 * 4), 5 / (2 * 1)])
+
+    # An absent class is clamped to count 1 (no div-by-zero); total stays the true 3.
+    safe = compute_class_weights([0, 0, 1], num_classes=3)
+    assert safe.tolist() == pytest.approx([3 / (3 * 2), 3 / (3 * 1), 3 / (3 * 1)])
 
 
 def test_pretrain_writes_checkpoint(cfg) -> None:

@@ -33,14 +33,14 @@ The project is being built and verified in stages.
 | 5 | Training layer (NT-Xent, SimCLR, supervised + FixMatch, callbacks) | ✅ done |
 | 6 | Evaluation — metrics ✅ · attention-rollout explainability ✅ | ✅ done |
 | 7 | CLI (`pretrain / finetune / evaluate / run-grid / smoke`) | ✅ done |
-| 8 | Streamlit app | ⏳ pending |
+| 8 | Streamlit app (upload → predict + attention overlay) | ✅ done |
 | 9 | README / SLURM template / EDA notebook | 🚧 in progress |
 | 10 | End-to-end smoke test on synthetic data | ✅ done |
 
 Current verification (everything that exists passes):
 
 ```bash
-uv run pytest               # 43 passed
+uv run pytest               # 46 passed
 uv run ruff check .         # All checks passed!
 uv run python scripts/diagnose.py   # 6/6 low-level learning checks pass (CPU)
 ```
@@ -232,6 +232,27 @@ Each `finetune`/`run-grid` run appends one row to `results/results.csv`
 
 ---
 
+## Demo app
+
+A Streamlit app turns a trained checkpoint into an interactive
+decision-support demo: upload an MRI slice and get the 4-class prediction, the
+per-class probabilities, and an attention-rollout overlay of the regions that
+drove the decision.
+
+```bash
+uv run streamlit run app/streamlit_app.py      # or: make app
+```
+
+Point the sidebar at a checkpoint (default `results/checkpoints/clf.pt`); train
+one first with `uv run btssl finetune --output results/checkpoints/clf.pt`. The
+prediction logic lives in `brain_tumor_ssl.inference` (`load_classifier`,
+`predict_image`) so it is unit-tested independently of the UI.
+
+> ⚠️ The app repeats the project-wide disclaimer: research only, **not** a medical
+> device — predictions are unverified and must not inform any clinical decision.
+
+---
+
 ## Project layout
 
 ```
@@ -243,8 +264,10 @@ src/brain_tumor_ssl/
 ├── evaluation/          # metrics + explain (ViT attention-rollout)
 ├── utils/               # seed, logging (loguru), device, io
 ├── runner.py            # end-to-end orchestration (pretrain/finetune/evaluate/grid)
+├── inference.py         # single-image predict + explanation (powers the app)
 └── cli.py               # typer app (pretrain / finetune / evaluate / run-grid / smoke)
-tests/                   # config, splits, transforms, models, metrics, explain, runner
+app/streamlit_app.py     # Streamlit decision-support demo (thin UI over inference)
+tests/                   # config, splits, transforms, models, metrics, explain, runner, inference
 ```
 
 ---

@@ -2,10 +2,10 @@
 # On Windows, run these via `make <target>` if GNU Make is installed,
 # or copy the underlying `uv run ...` command directly.
 
-.PHONY: help sync lint format test smoke check clean
+.PHONY: help sync lint format test smoke app check clean
 
 help:  ## Show this help.
-	@echo "Targets: sync lint format test smoke check clean"
+	@echo "Targets: sync lint format test smoke app check clean"
 
 sync:  ## Resolve and install all dependencies into the venv.
 	uv sync
@@ -22,6 +22,9 @@ test:  ## Run the test suite.
 
 smoke:  ## End-to-end SSL + FixMatch + eval on synthetic data (CPU).
 	uv run btssl smoke
+
+app:  ## Launch the Streamlit decision-support demo.
+	uv run streamlit run app/streamlit_app.py
 
 check: lint test  ## Lint + test (CI gate).
 

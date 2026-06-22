@@ -73,6 +73,30 @@ def _epoch_end(
     return stopper.should_stop
 
 
+def _next_unlabeled(
+    unl_iter: object, unlabeled_loader: DataLoader
+) -> tuple[object, tuple[torch.Tensor, torch.Tensor]] | None:
+    """Fetch the next unlabelled ``(weak, strong)`` batch, restarting on exhaustion.
+
+    Args:
+        unl_iter: The current iterator over ``unlabeled_loader``.
+        unlabeled_loader: The loader to restart from when the iterator is exhausted.
+
+    Returns:
+        ``(iterator, (weak, strong))`` with a possibly-renewed iterator, or ``None``
+        if the loader yields no batches at all (so the caller falls back to a purely
+        supervised step).
+    """
+    try:
+        return unl_iter, next(unl_iter)
+    except StopIteration:
+        unl_iter = iter(unlabeled_loader)
+        try:
+            return unl_iter, next(unl_iter)
+        except StopIteration:
+            return None
+
+
 def finetune_supervised(
     model: nn.Module,
     train_loader: DataLoader,
@@ -168,11 +192,13 @@ def finetune_fixmatch(
                 loss_u = torch.zeros((), device=device)
 
                 if unl_iter is not None:
-                    try:
-                        weak, strong = next(unl_iter)
-                    except StopIteration:
-                        unl_iter = iter(unlabeled_loader)
-                        weak, strong = next(unl_iter)
+                    batch = _next_unlabeled(unl_iter, unlabeled_loader)
+                    if batch is None:
+                        # The unlabelled loader yields no batches; act supervised-only.
+                        unl_iter = None
+                    else:
+                        unl_iter, (weak, strong) = batch
+                if unl_iter is not None:
                     weak = weak.to(device, non_blocking=True)
                     strong = strong.to(device, non_blocking=True)
 

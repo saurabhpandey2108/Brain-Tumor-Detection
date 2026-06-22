@@ -32,21 +32,21 @@ The project is being built and verified in stages.
 | 4 | Models layer (timm ViT backbone, heads, classifier) | ✅ done |
 | 5 | Training layer (NT-Xent, SimCLR, supervised + FixMatch, callbacks) | ✅ done |
 | 6 | Evaluation — metrics ✅ · attention-rollout explainability ✅ | ✅ done |
-| 7 | CLI (`pretrain / finetune / evaluate / run-grid / smoke`) | ⏳ pending |
+| 7 | CLI (`pretrain / finetune / evaluate / run-grid / smoke`) | ✅ done |
 | 8 | Streamlit app | ⏳ pending |
 | 9 | README / SLURM template / EDA notebook | 🚧 in progress |
-| 10 | End-to-end smoke test on synthetic data | ⏳ pending |
+| 10 | End-to-end smoke test on synthetic data | ✅ done |
 
 Current verification (everything that exists passes):
 
 ```bash
-uv run pytest        # 39 passed
+uv run pytest        # 43 passed
 uv run ruff check .  # All checks passed!
 ```
 
-> Note: `uv run btssl <pretrain|finetune|evaluate|run-grid|smoke>` and HPC training
-> are **not available yet** — they land in Stage 7+. Only `uv run btssl version`
-> works today.
+> Note: the `btssl` subcommands now run end to end on CPU. Try
+> `uv run btssl smoke` for a full pretrain → finetune → evaluate pass on a
+> generated synthetic dataset. HPC/SLURM training templates land in Stage 9.
 
 ---
 
@@ -196,6 +196,36 @@ cfg = load_config(overrides={"finetune": {"method": "supervised"}})  # per-run o
 
 ---
 
+## Running the pipeline
+
+All stages are driven by the `btssl` CLI (thin wrappers over
+`brain_tumor_ssl.runner`, which is import-and-call usable from notebooks/the app too):
+
+```bash
+# 0. Verify wiring end-to-end on a generated synthetic dataset (CPU, seconds)
+uv run btssl smoke
+
+# 1. SimCLR self-supervised pretraining -> SSL checkpoint
+uv run btssl pretrain --checkpoint results/checkpoints/simclr.pt
+
+# 2. Fine-tune at one (label_fraction, seed) point and evaluate on the test split
+uv run btssl finetune -f 0.1 --seed 42 \
+    --ssl-checkpoint results/checkpoints/simclr.pt \
+    --output results/checkpoints/clf.pt
+# (--method supervised|fixmatch overrides the config; omit --ssl-checkpoint for B1/B2)
+
+# 3. Score a saved checkpoint, optionally writing attention-rollout overlays
+uv run btssl evaluate results/checkpoints/clf.pt --explain 8
+
+# 4. Sweep the full seeds x label_fractions grid -> results/results.csv
+uv run btssl run-grid --ssl-checkpoint results/checkpoints/simclr.pt
+```
+
+Each `finetune`/`run-grid` run appends one row to `results/results.csv`
+(`seed, label_fraction, split, method, ssl_init, accuracy, macro_f1, config_hash`).
+
+---
+
 ## Project layout
 
 ```
@@ -206,8 +236,9 @@ src/brain_tumor_ssl/
 ├── training/            # losses (NT-Xent), ssl_simclr, finetune, callbacks
 ├── evaluation/          # metrics + explain (ViT attention-rollout)
 ├── utils/               # seed, logging (loguru), device, io
-└── cli.py               # typer app (subcommands pending)
-tests/                   # config, splits, transforms, models, metrics, explain
+├── runner.py            # end-to-end orchestration (pretrain/finetune/evaluate/grid)
+└── cli.py               # typer app (pretrain / finetune / evaluate / run-grid / smoke)
+tests/                   # config, splits, transforms, models, metrics, explain, runner
 ```
 
 ---

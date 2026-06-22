@@ -40,9 +40,15 @@ The project is being built and verified in stages.
 Current verification (everything that exists passes):
 
 ```bash
-uv run pytest        # 43 passed
-uv run ruff check .  # All checks passed!
+uv run pytest               # 43 passed
+uv run ruff check .         # All checks passed!
+uv run python scripts/diagnose.py   # 6/6 low-level learning checks pass (CPU)
 ```
+
+`scripts/diagnose.py` is a CPU-only correctness harness for when no GPU/HPC is
+available: it verifies NT-Xent against a reference, that SimCLR loss decreases,
+that a classifier overfits separable data to 100% train accuracy (gradients +
+label mapping correct), determinism under a fixed seed, and that FixMatch learns.
 
 > Note: the `btssl` subcommands now run end to end on CPU. Try
 > `uv run btssl smoke` for a full pretrain → finetune → evaluate pass on a

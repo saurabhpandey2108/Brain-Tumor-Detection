@@ -1,0 +1,11 @@
+# CPU-only composition root for a quick, low-resource proof run.
+# Swaps in a tiny ViT at a smaller image size so training/inference run on CPU in
+# minutes; reuses the ssl/finetune/experiment sections from the main config.
+# Point the Streamlit app's "Config path" at this file when loading a checkpoint
+# trained with it (e.g. results/checkpoints/clf.pt from `make app` proof runs).
+includes:
+  data: data.cpu.yaml
+  model: model.cpu.yaml
+  ssl: ssl.yaml
+  finetune: finetune.yaml
+  experiment: experiment.yaml

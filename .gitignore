@@ -9,9 +9,9 @@ wheels/
 # Virtual environments
 .venv/
 
-# Data (large; not versioned)
-/Dataset/
-data/
+# # Data (large; not versioned)
+# /Dataset/
+# data/
 
 # Experiment outputs
 results/

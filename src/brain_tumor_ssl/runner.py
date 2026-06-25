@@ -127,9 +127,12 @@ def run_pretrain(cfg: Config, *, checkpoint_path: Path | None = None) -> Path:
     )
 
     model = build_simclr_model(cfg.model, cfg.ssl, cfg.data.image_size)
-    history = pretrain_simclr(model, loader, cfg.ssl, device)
 
     path = checkpoint_path or _checkpoints_dir(cfg) / "simclr.pt"
+    history = pretrain_simclr(
+        model, loader, cfg.ssl, device, checkpoint_path=path, config_hash=cfg.config_hash()
+    )
+
     save_checkpoint(
         {
             "model": model.state_dict(),

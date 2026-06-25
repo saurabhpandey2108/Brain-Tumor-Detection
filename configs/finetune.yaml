@@ -22,6 +22,8 @@ class_weighted: true     # weight labelled CE by inverse class frequency (handle
 # FixMatch-specific hyperparameters (used only when method == "fixmatch" AND there
 # is unlabelled data, i.e. label_fraction < 1.0).
 fixmatch:
-  mu: 7                   # unlabelled : labelled batch-size ratio
+  mu: 2                   # unlabelled : labelled batch-size ratio
+                         # CPU-safe: unlabelled forward = batch_size * mu = 32*2 = 64 images.
+                         # mu 7 (standard FixMatch) gives 224 -> OOMs vit_base on CPU. Raise on a GPU.
   threshold: 0.95        # pseudo-label confidence threshold
   lambda_u: 1.0          # weight on the unlabelled consistency loss

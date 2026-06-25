@@ -72,6 +72,13 @@ class SSLConfig(_Strict):
     temperature: float = Field(gt=0.0)
     proj_dim: int = Field(gt=0)
     proj_hidden_dim: int = Field(gt=0)
+    # Optional convergence-based early stopping on the training NT-Xent loss.
+    # `early_stop_patience` of 0 disables it entirely (run all `epochs`), which is
+    # the default so GPU runs and the smoke test behave exactly as before.
+    early_stop_patience: int = Field(default=0, ge=0)
+    early_stop_min_delta: float = Field(default=0.0, ge=0.0)
+    # Save a crash-safe checkpoint every N epochs (0 = only at the end of training).
+    checkpoint_every: int = Field(default=0, ge=0)
 
 
 class FixMatchConfig(_Strict):

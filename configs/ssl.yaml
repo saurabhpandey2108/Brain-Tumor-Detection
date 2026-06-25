@@ -1,8 +1,15 @@
 # SimCLR self-supervised pretraining (Stage 1 of the method).
-epochs: 100
+epochs: 100              # max epochs (early stopping below ends the run at convergence)
 lr: 1.0e-3
-batch_size: 256
+batch_size: 32
 weight_decay: 1.0e-6
 temperature: 0.5         # NT-Xent temperature
 proj_dim: 128            # projection head output dim
 proj_hidden_dim: 2048    # projection head hidden dim
+
+# Convergence-based early stopping on the training NT-Xent loss (0 = run all epochs).
+# The lowest-loss weights are restored at the end. Set patience to 0 to disable.
+early_stop_patience: 10  # stop after 10 epochs with no loss improvement
+early_stop_min_delta: 1.0e-4  # min loss decrease to count as an improvement
+# Crash-safety for long CPU runs: write the checkpoint every N epochs (0 = only at end).
+checkpoint_every: 5
